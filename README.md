@@ -15,7 +15,7 @@ To run a migration up/down use:
 ```
 cd sql/schema
 
-goose postgres postgresql://postgres:240301@localhost:5432/rssagg up
+goose postgres postgresql://postgres:240301@192.168.88.28:5432/rssagg up
 ```
 
 The interaction is done with sqlc:

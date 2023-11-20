@@ -1,6 +1,7 @@
 package main
 
 import (
+	"database/sql"
 	"fmt"
 	"log"
 	"net/http"
@@ -9,6 +10,9 @@ import (
 	"github.com/go-chi/chi"
 	"github.com/go-chi/cors"
 	"github.com/joho/godotenv"
+
+	"github.com/ToroEtele/rss-aggregator/internal/database"
+	_ "github.com/lib/pq"
 )
 
 type apiConfig struct {
@@ -27,19 +31,38 @@ func main() {
 		log.Fatal("Database is required to run the server")
 	}
 
+	conn, err := sql.Open("postgres", dbURL)
+	if err != nil {
+		log.Fatal("Can't connect to database")
+	}
+
+	apiConfig := apiConfig{
+		DB: database.New(conn),
+	}
+
 	router := chi.NewRouter()
 
+	router.Use(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			log.Printf("Request received: %s %s", r.Method, r.URL.Path)
+			next.ServeHTTP(w, r)
+		})
+	})
+	
 	router.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   []string{"https://*", "http://*"},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"*"},
-		AllowCredentials: true,
+		ExposedHeaders:   []string{"Link"},
+		AllowCredentials: false,
 		MaxAge:           300,
 	}))
+
 
 	v1Router := chi.NewRouter()
 	v1Router.Get("/healthz", handlerReadiness)
 	v1Router.Get("/err", handlerErr)
+	v1Router.Post("/users", apiConfig.handlerCreateUser)
 
 	router.Mount("/v1", v1Router)
 
@@ -50,7 +73,7 @@ func main() {
 		}
 
 	fmt.Printf("Server starting on port %v \n", portString)
-	err := srv.ListenAndServe()
+	err = srv.ListenAndServe()
 	if err != nil {
 		log.Fatal(err)
 	}
